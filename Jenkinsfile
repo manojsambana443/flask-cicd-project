@@ -47,7 +47,7 @@ pipeline {
         withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
           sh "kubectl rollout status deployment/flask-cicd-demo --timeout=120s"
           sh "kubectl get pods -l app=flask-cicd-demo -o jsonpath='{.items[0].metadata.name}' > /tmp/podname"
-          sh "kubectl port-forward $(cat /tmp/podname) 8080:3000 & sleep 3"
+          sh 'kubectl port-forward $(cat /tmp/podname) 8080:3000 & sleep 3'
           sh "BASE_URL=http://127.0.0.1:8080 ./scripts/integration-test.sh"
         }
       }
