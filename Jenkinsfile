@@ -1,64 +1,111 @@
 pipeline {
   agent any
+
   environment {
-    REGISTRY = "docker.io/your-dockerhub-user"
+    // TODO: change this to your real Docker Hub username
+    REGISTRY   = "docker.io/YOUR_DOCKERHUB_USER"
     IMAGE_NAME = "flask-cicd-demo"
-    TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
-    IMAGE = "${env.REGISTRY}/${env.IMAGE_NAME}:${env.TAG}"
+    TAG        = "${env.BUILD_NUMBER}-${(env.GIT_COMMIT ?: 'local').take(7)}"
+    IMAGE      = "${REGISTRY}/${IMAGE_NAME}:${TAG}"
   }
+
   stages {
+
     stage('Checkout') {
-      steps { checkout scm }
+      steps {
+        // uses the job's SCM config (GitHub repo you configured)
+        checkout scm
+      }
     }
+
     stage('Unit / Smoke Test (local)') {
       steps {
         dir('app') {
-          sh 'python -m pip install --upgrade pip setuptools'
-          sh 'pip install -r requirements.txt'
-          // run tests if any (here we keep smoke script for local run)
+          // Windows batch block
+          bat '''
+            python -m pip install --upgrade pip setuptools
+            pip install -r requirements.txt
+            rem TODO: add real tests later (pytest, etc.)
+          '''
         }
       }
     }
+
     stage('Build Docker Image') {
       steps {
-        script {
-          sh "docker build -t ${IMAGE} ."
-        }
+        echo "Building Docker image: ${IMAGE}"
+        bat "docker build -t ${IMAGE} ."
       }
     }
+
     stage('Push Image') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-          sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-          sh "docker push ${IMAGE}"
+        withCredentials([usernamePassword(
+          credentialsId: 'dockerhub-creds',
+          usernameVariable: 'DOCKER_USER',
+          passwordVariable: 'DOCKER_PASS'
+        )]) {
+          // login + push using Windows cmd
+          bat """
+            docker login -u %DOCKER_USER% -p %DOCKER_PASS%
+            docker push ${IMAGE}
+          """
         }
       }
     }
+
+    // --- Kubernetes stages are placeholders for now ---
+    // You can enable these later after we:
+    // 1) install kubectl on Windows
+    // 2) add kubeconfig as a file credential in Jenkins
+    // 3) confirm cluster access
+
     stage('Deploy to Kubernetes') {
+      when {
+        expression { false }  // <-- change to `true` once k8s is ready
+      }
       steps {
-        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-          sh "kubectl set image -f k8s/deployment.yaml app=${IMAGE} --record || kubectl apply -f k8s/deployment.yaml"
-          sh "kubectl apply -f k8s/service.yaml"
+        echo "Kubernetes deployment is currently disabled (enable when cluster is ready)."
+        /*
+        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+          bat """
+            set KUBECONFIG=%KUBECONFIG_FILE%
+            kubectl apply -f k8s\\deployment.yaml
+            kubectl apply -f k8s\\service.yaml
+          """
         }
+        */
       }
     }
+
     stage('Integration Tests') {
+      when {
+        expression { false } // enable later
+      }
       steps {
-        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-          sh "kubectl rollout status deployment/flask-cicd-demo --timeout=120s"
-          sh "kubectl get pods -l app=flask-cicd-demo -o jsonpath='{.items[0].metadata.name}' > /tmp/podname"
-          sh 'kubectl port-forward $(cat /tmp/podname) 8080:3000 & sleep 3'
-          sh "BASE_URL=http://127.0.0.1:8080 ./scripts/integration-test.sh"
+        echo "Integration tests are disabled for now (will use kubectl port-forward + scripts/integration-test.sh)."
+        /*
+        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+          bat """
+            set KUBECONFIG=%KUBECONFIG_FILE%
+            rem Example: run integration tests after port-forwarding service
+            rem kubectl get pods -l app=flask-cicd-demo
+            rem kubectl port-forward <pod-name> 8080:3000
+            rem call scripts\\integration-test.sh (would need bash or WSL)
+          """
         }
+        */
       }
     }
   }
+
   post {
     failure {
-      echo 'Pipeline failed — review logs and consider rollback'
+      echo 'Pipeline failed — review logs.'
     }
     success {
-      echo "Pipeline succeeded: ${IMAGE}"
+      echo "Pipeline succeeded. Image built and pushed: ${IMAGE}"
     }
   }
 }
+
