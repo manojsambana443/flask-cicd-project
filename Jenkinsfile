@@ -2,32 +2,30 @@ pipeline {
   agent any
 
   environment {
-    // TODO: change this to your real Docker Hub username
+    // CHANGE THIS to your real Docker Hub username
     REGISTRY   = "docker.io/YOUR_DOCKERHUB_USER"
     IMAGE_NAME = "flask-cicd-demo"
-    TAG        = "${env.BUILD_NUMBER}-${(env.GIT_COMMIT ?: 'local').take(7)}"
+    // keep TAG simple for now
+    TAG        = "${env.BUILD_NUMBER}"
     IMAGE      = "${REGISTRY}/${IMAGE_NAME}:${TAG}"
   }
 
   stages {
 
+    // This uses the job's GitHub config (Pipeline script from SCM)
     stage('Checkout') {
       steps {
-        // uses the job's SCM config (GitHub repo you configured)
         checkout scm
       }
     }
 
+    // Temporarily disabled because Windows Jenkins can't see python/pip yet
     stage('Unit / Smoke Test (local)') {
+      when {
+        expression { false }  // always skip for now
+      }
       steps {
-        dir('app') {
-          // Windows batch block
-          bat '''
-            python -m pip install --upgrade pip setuptools
-            pip install -r requirements.txt
-            rem TODO: add real tests later (pytest, etc.)
-          '''
-        }
+        echo 'Skipping Unit / Smoke Test (local) for now (Python not available on Jenkins Windows).'
       }
     }
 
@@ -40,12 +38,13 @@ pipeline {
 
     stage('Push Image') {
       steps {
-        withCredentials([usernamePassword(
-          credentialsId: 'dockerhub-creds',
-          usernameVariable: 'DOCKER_USER',
-          passwordVariable: 'DOCKER_PASS'
-        )]) {
-          // login + push using Windows cmd
+        withCredentials([
+          usernamePassword(
+            credentialsId: 'dockerhub-creds',
+            usernameVariable: 'DOCKER_USER',
+            passwordVariable: 'DOCKER_PASS'
+          )
+        ]) {
           bat """
             docker login -u %DOCKER_USER% -p %DOCKER_PASS%
             docker push ${IMAGE}
@@ -54,18 +53,13 @@ pipeline {
       }
     }
 
-    // --- Kubernetes stages are placeholders for now ---
-    // You can enable these later after we:
-    // 1) install kubectl on Windows
-    // 2) add kubeconfig as a file credential in Jenkins
-    // 3) confirm cluster access
-
+    // === FUTURE: enable this after we set up kubectl + cluster + kubeconfig ===
     stage('Deploy to Kubernetes') {
       when {
-        expression { false }  // <-- change to `true` once k8s is ready
+        expression { false } // change to true once K8s is ready
       }
       steps {
-        echo "Kubernetes deployment is currently disabled (enable when cluster is ready)."
+        echo "Kubernetes deployment is disabled for now."
         /*
         withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
           bat """
@@ -83,15 +77,12 @@ pipeline {
         expression { false } // enable later
       }
       steps {
-        echo "Integration tests are disabled for now (will use kubectl port-forward + scripts/integration-test.sh)."
+        echo "Integration tests are disabled for now (will add after K8s is working)."
         /*
         withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
           bat """
             set KUBECONFIG=%KUBECONFIG_FILE%
-            rem Example: run integration tests after port-forwarding service
-            rem kubectl get pods -l app=flask-cicd-demo
-            rem kubectl port-forward <pod-name> 8080:3000
-            rem call scripts\\integration-test.sh (would need bash or WSL)
+            rem Here we would port-forward and call scripts\\integration-test.sh
           """
         }
         */
@@ -108,4 +99,5 @@ pipeline {
     }
   }
 }
+
 
