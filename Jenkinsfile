@@ -3,7 +3,7 @@ pipeline {
 
   environment {
     // CHANGE THIS to your real Docker Hub username
-    REGISTRY   = "docker.io/YOUR_DOCKERHUB_USER"
+    REGISTRY   = "docker.io/smk135"
     IMAGE_NAME = "flask-cicd-demo"
     // keep TAG simple for now
     TAG        = "${env.BUILD_NUMBER}"
