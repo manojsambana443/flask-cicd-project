@@ -13,19 +13,8 @@ spec:
         app: flask-cicd-demo
     spec:
       containers:
-      - name: app
-        image: REPLACE_IMAGE
-        ports:
-        - containerPort: 3000
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 15
-          periodSeconds: 20
+        - name: flask-cicd-demo
+          image: smk135/flask-cicd-demo:13   # <-- important: valid, existing image
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000           # or 5000 if your app uses that
