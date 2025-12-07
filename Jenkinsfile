@@ -2,28 +2,28 @@ pipeline {
   agent any
 
   environment {
-    // Docker Hub registry and image info
+    // Docker Hub image info
     REGISTRY   = "docker.io/smk135"
     IMAGE_NAME = "flask-cicd-demo"
-
-    // Use Jenkins build number as tag (13, 14, etc.)
     TAG        = "${env.BUILD_NUMBER}"
     IMAGE      = "${REGISTRY}/${IMAGE_NAME}:${TAG}"
+
+    // kubectl path from: Get-Command kubectl | Select-Object Source
+    KUBECTL = "C:\\Program Files\\Docker\\Docker\\resources\\bin\\kubectl.exe"
   }
 
   stages {
 
     stage('Checkout') {
       steps {
-        // Uses the job's SCM (your GitHub repo configured in Jenkins)
         checkout scm
       }
     }
 
-    // 🔹 Python smoke tests disabled for now (no Python on Jenkins Windows)
+    // still skipped for now
     stage('Unit / Smoke Test (local)') {
       when {
-        expression { false } // always skip for now
+        expression { false }
       }
       steps {
         echo 'Skipping Unit / Smoke Test (local) (Python not wired on Jenkins yet).'
@@ -57,19 +57,17 @@ pipeline {
 
     stage('Deploy to Kubernetes') {
       steps {
-        echo 'Deploying to Kubernetes cluster...'
-        // Assumes kubectl is on PATH and docker-desktop context exists
+        echo 'Deploying to Kubernetes cluster from Jenkins...'
         bat """
-          kubectl config use-context docker-desktop
-          kubectl apply -f k8s
+          "%KUBECTL%" config use-context docker-desktop
+          "%KUBECTL%" apply -f k8s
         """
       }
     }
 
-    // 🔹 Integration tests disabled for now (we can add later)
     stage('Integration Tests') {
       when {
-        expression { false } // enable later
+        expression { false }
       }
       steps {
         echo 'Integration tests are disabled for now.'
@@ -79,13 +77,14 @@ pipeline {
 
   post {
     success {
-      echo "Pipeline succeeded. Image built and pushed: ${IMAGE}"
+      echo "Pipeline succeeded. Image built, pushed, and deployed: ${IMAGE}"
     }
     failure {
       echo 'Pipeline failed — review logs.'
     }
   }
 }
+
 
 
 
