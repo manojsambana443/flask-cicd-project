@@ -1,89 +1,113 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    // Docker Hub image info
-    REGISTRY   = "docker.io/smk135"
-    IMAGE_NAME = "flask-cicd-demo"
-    TAG        = "${env.BUILD_NUMBER}"
-    IMAGE      = "${REGISTRY}/${IMAGE_NAME}:${TAG}"
+    // Global environment for the pipeline
+    environment {
+        // Docker image name (tagged with Jenkins build number)
+        IMAGE_NAME = "docker.io/smk135/flask-cicd-demo:${BUILD_NUMBER}"
 
-    // kubectl path from: Get-Command kubectl | Select-Object Source
-    KUBECTL = "C:\\Program Files\\Docker\\Docker\\resources\\bin\\kubectl.exe"
-  }
+        // Kubeconfig path for Jenkins service user
+        KUBECONFIG = 'C:\\ProgramData\\Jenkins\\.kube\\config'
 
-  stages {
-
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+        // kubectl path from Docker Desktop installation
+        KUBECTL    = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\kubectl.exe'
     }
 
-    // still skipped for now
-    stage('Unit / Smoke Test (local)') {
-      when {
-        expression { false }
-      }
-      steps {
-        echo 'Skipping Unit / Smoke Test (local) (Python not wired on Jenkins yet).'
-      }
+    options {
+        // Avoid double checkout (we manage checkout ourselves)
+        skipDefaultCheckout()
     }
 
-    stage('Build Docker Image') {
-      steps {
-        echo "Building Docker image: ${IMAGE}"
-        bat "docker build -t ${IMAGE} ."
-      }
-    }
+    stages {
 
-    stage('Push Image') {
-      steps {
-        withCredentials([
-          usernamePassword(
-            credentialsId: 'dockerhub-creds',
-            usernameVariable: 'DOCKER_USER',
-            passwordVariable: 'DOCKER_PASS'
-          )
-        ]) {
-          bat """
-            docker login -u %DOCKER_USER% -p %DOCKER_PASS%
-            docker push ${IMAGE}
-            docker logout
-          """
+        stage('Checkout') {
+            steps {
+                echo "Checking out source code from Git..."
+                checkout scm
+            }
         }
-      }
+
+        stage('Unit / Smoke Test (local)') {
+            when {
+                // Keep this false for now so it doesn't block your pipeline
+                expression { return false }
+            }
+            steps {
+                echo "Here you can run pytest or simple curl-based smoke tests."
+                // Example (uncomment when you actually add tests):
+                // bat 'python -m pytest'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo "Building Docker image: ${IMAGE_NAME}"
+                bat """
+                docker version
+                docker build -t ${IMAGE_NAME} .
+                """
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                // Replace 'dockerhub-creds' with your actual Jenkins credential ID
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    echo "Logging in to Docker Hub and pushing image..."
+                    bat """
+                    docker login -u %DOCKER_USER% -p %DOCKER_PASS%
+                    docker push ${IMAGE_NAME}
+                    docker logout
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                echo "Deploying to Kubernetes cluster from Jenkins..."
+                bat """
+                echo Using KUBECONFIG=%KUBECONFIG%
+
+                "%KUBECTL%" config get-contexts
+
+                REM If docker-desktop context exists, switch to it (ignore error if not)
+                "%KUBECTL%" config use-context docker-desktop || echo Context 'docker-desktop' not switched (might already be current).
+
+                "%KUBECTL%" get nodes
+
+                REM Apply all manifests in k8s folder
+                "%KUBECTL%" apply -f k8s
+                """
+            }
+        }
+
+        stage('Integration Tests') {
+            when {
+                expression { return false }  // enable later when you add tests
+            }
+            steps {
+                echo "Run post-deploy integration tests here (curl the service, etc.)."
+            }
+        }
     }
 
-    stage('Deploy to Kubernetes') {
-      steps {
-        echo 'Deploying to Kubernetes cluster from Jenkins...'
-        bat """
-          "%KUBECTL%" config use-context docker-desktop
-          "%KUBECTL%" apply -f k8s
-        """
-      }
+    post {
+        success {
+            echo "Pipeline completed successfully ✅"
+        }
+        failure {
+            echo "Pipeline failed — review logs ❌"
+        }
     }
-
-    stage('Integration Tests') {
-      when {
-        expression { false }
-      }
-      steps {
-        echo 'Integration tests are disabled for now.'
-      }
-    }
-  }
-
-  post {
-    success {
-      echo "Pipeline succeeded. Image built, pushed, and deployed: ${IMAGE}"
-    }
-    failure {
-      echo 'Pipeline failed — review logs.'
-    }
-  }
 }
+
 
 
 
