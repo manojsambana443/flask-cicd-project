@@ -2,30 +2,31 @@ pipeline {
   agent any
 
   environment {
-    // CHANGE THIS to your real Docker Hub username
+    // Docker Hub registry and image info
     REGISTRY   = "docker.io/smk135"
     IMAGE_NAME = "flask-cicd-demo"
-    // keep TAG simple for now
+
+    // Use Jenkins build number as tag (13, 14, etc.)
     TAG        = "${env.BUILD_NUMBER}"
     IMAGE      = "${REGISTRY}/${IMAGE_NAME}:${TAG}"
   }
 
   stages {
 
-    // This uses the job's GitHub config (Pipeline script from SCM)
     stage('Checkout') {
       steps {
+        // Uses the job's SCM (your GitHub repo configured in Jenkins)
         checkout scm
       }
     }
 
-    // Temporarily disabled because Windows Jenkins can't see python/pip yet
+    // 🔹 Python smoke tests disabled for now (no Python on Jenkins Windows)
     stage('Unit / Smoke Test (local)') {
       when {
-        expression { false }  // always skip for now
+        expression { false } // always skip for now
       }
       steps {
-        echo 'Skipping Unit / Smoke Test (local) for now (Python not available on Jenkins Windows).'
+        echo 'Skipping Unit / Smoke Test (local) (Python not wired on Jenkins yet).'
       }
     }
 
@@ -48,56 +49,43 @@ pipeline {
           bat """
             docker login -u %DOCKER_USER% -p %DOCKER_PASS%
             docker push ${IMAGE}
+            docker logout
           """
         }
       }
     }
 
-    // === FUTURE: enable this after we set up kubectl + cluster + kubeconfig ===
     stage('Deploy to Kubernetes') {
-      when {
-        expression { false } // change to true once K8s is ready
-      }
       steps {
-        echo "Kubernetes deployment is disabled for now."
-        /*
-        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
-          bat """
-            set KUBECONFIG=%KUBECONFIG_FILE%
-            kubectl apply -f k8s\\deployment.yaml
-            kubectl apply -f k8s\\service.yaml
-          """
-        }
-        */
+        echo 'Deploying to Kubernetes cluster...'
+        // Assumes kubectl is on PATH and docker-desktop context exists
+        bat """
+          kubectl config use-context docker-desktop
+          kubectl apply -f k8s
+        """
       }
     }
 
+    // 🔹 Integration tests disabled for now (we can add later)
     stage('Integration Tests') {
       when {
         expression { false } // enable later
       }
       steps {
-        echo "Integration tests are disabled for now (will add after K8s is working)."
-        /*
-        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
-          bat """
-            set KUBECONFIG=%KUBECONFIG_FILE%
-            rem Here we would port-forward and call scripts\\integration-test.sh
-          """
-        }
-        */
+        echo 'Integration tests are disabled for now.'
       }
     }
   }
 
   post {
-    failure {
-      echo 'Pipeline failed — review logs.'
-    }
     success {
       echo "Pipeline succeeded. Image built and pushed: ${IMAGE}"
     }
+    failure {
+      echo 'Pipeline failed — review logs.'
+    }
   }
 }
+
 
 
