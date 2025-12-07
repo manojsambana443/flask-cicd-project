@@ -4,6 +4,13 @@ app = Flask(__name__)
 
 store = {"message": "hello world"}
 
+@app.get("/")
+def index():
+    return jsonify(
+        message=store["message"],
+        status="Flask CI/CD demo running successfully!"
+    )
+
 @app.get("/health")
 def health():
     return jsonify(ok=True)
@@ -20,6 +27,7 @@ def set_message():
         return jsonify(error="no message"), 400
     store["message"] = msg
     return jsonify(store)
+
 
 if __name__ == "__main__":
     # For local development only; production uses gunicorn
